@@ -25,6 +25,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import db as DB  # noqa: E402
 import evaluate as E  # noqa: E402
 import load  # noqa: E402
 import metrics as M  # noqa: E402
@@ -175,7 +176,7 @@ POLY_COLS = list(METRICS)
 @st.cache_data(show_spinner=False)
 def load_metrics() -> pd.DataFrame:
     """동별 지표 432행."""
-    df = pd.read_csv(OUTPUTS / "dong_metrics.csv")
+    df = DB.load("dong_metrics")
     df["base"] = df["dong_canon"].map(load._base_dong)
     return df
 
@@ -183,7 +184,7 @@ def load_metrics() -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def load_demand() -> pd.DataFrame:
     """동 × 시간대 × 평일/주말 콜 수."""
-    return pd.read_parquet(OUTPUTS / "dong_demand_matrix.parquet")
+    return DB.load("dong_demand_matrix")
 
 
 @st.cache_data(show_spinner=False)
@@ -236,14 +237,13 @@ def load_candidates() -> pd.DataFrame:
     반환: load.load_candidates() 컬럼 + assigned_dongs(문자열), n_assigned_dongs
     """
     cand = load.load_candidates()
-    path = OUTPUTS / "dong_candidates.csv"
-    if not path.exists():
+    if not DB.available("dong_candidates"):
         cand = cand.assign(assigned_dongs="", n_assigned_dongs=0)
         cand.attrs["n_outdoor"] = len(cand)
         cand.attrs["assigned_only"] = False
         return cand
 
-    a = pd.read_csv(path)
+    a = DB.load("dong_candidates")
     a = a[a["is_assigned"] & a["cand_id"].notna()]
     per = (a.assign(label=a["gu"] + " " + a["dong_canon"])
             .groupby("cand_id")["label"]
@@ -289,10 +289,9 @@ def load_placement() -> pd.DataFrame:
           rate_total_sd, before_total, after_total, obs_total_min,
           sim_obs_ratio (+ after 파생)
     """
-    path = OUTPUTS / "placement_grades.csv"
-    if not path.exists():
+    if not DB.available("placement_grades"):
         return pd.DataFrame()
-    g = pd.read_csv(path, encoding="utf-8-sig")
+    g = DB.load("placement_grades")
     g = g[[c for c in g.columns if not c.startswith(REF_PREFIX)]].copy()
     g["after"] = g["before"] + g["delta"]
     g["half"] = (g["rate_hi"] - g["rate_lo"]) / 2
@@ -306,10 +305,9 @@ def load_placement_seeds() -> pd.DataFrame:
     평균 하나만 보이면 σ 가 어디서 왔는지 알 수 없다 — 원값 3개를 열어 두면
     "이 후보는 시드에 따라 이만큼 흔들린다"를 직접 확인할 수 있다.
     """
-    path = OUTPUTS / "placement_eval.csv"
-    if not path.exists():
+    if not DB.available("placement_eval"):
         return pd.DataFrame()
-    ev = pd.read_csv(path, encoding="utf-8-sig")
+    ev = DB.load("placement_eval")
     return ev.drop_duplicates(["cand_id", "seed"], keep="first")
 
 
@@ -335,10 +333,9 @@ def placement_scope() -> dict:
 
     반환: {cand_id: {polys, assigned, lat, lon, n_dong, n_unmapped}}
     """
-    ac = OUTPUTS / "dong_candidates.csv"
-    if not ac.exists():
+    if not DB.available("dong_candidates"):
         return {}
-    a = pd.read_csv(ac)
+    a = DB.load("dong_candidates")
     a = a[a["is_assigned"] & a["cand_id"].notna()]
 
     # 지표 행 → 폴리곤. resolve_polygons 의 3단 매칭 결과를 거꾸로 뒤집는다.
@@ -352,7 +349,9 @@ def placement_scope() -> dict:
             poly_of_key[key_of[j]] = codes[pi]
     known = set(codes)
 
-    dong_xy = E.dong_coords()
+    # E.dong_coords() 는 outputs/dong_metrics.csv 를 직접 읽는다. DB 모드에서는 그 파일이
+    # 없으므로 같은 표(load_metrics)에서 좌표를 뽑는다 — 내용은 dong_coords 와 같다.
+    dong_xy = metrics_df[["gu", "dong_canon", "lat", "lon"]].dropna().reset_index(drop=True)
     out = {}
     for cid, grp in a.groupby("cand_id"):
         r = grp.iloc[0]

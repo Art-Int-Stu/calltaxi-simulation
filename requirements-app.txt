@@ -1,0 +1,24 @@
+# 대시보드 실행 전용 — 컨테이너 이미지용 (전체 목록은 requirements.txt)
+#
+# 시뮬레이션 실행·분석·테스트용 라이브러리(matplotlib, jupyter, pytest, openpyxl,
+# pyarrow)는 대시보드가 쓰지 않으므로 뺐다. 이미지가 작아지고 공격 표면이 준다.
+#
+# 대시보드가 실제로 임포트하는 것(2026-09 코드 기준):
+#   dashboard: numpy pandas plotly streamlit / load: geopandas(경계, 함수 안에서 지연 임포트)
+#   simulator: simpy / db: oracledb(DB 모드일 때만)
+#   scipy: 코드에 import 는 없지만 pandas 의 Series.corr(method="spearman") 이 내부에서 쓴다
+#          (후보 결과 화면의 분포 패널). 헤드리스 실행으로 발견했다.
+
+pandas>=2.2,<3.0        # 3.0 은 copy-on-write 기본화로 결과가 갈릴 수 있어 상한을 둔다.
+                        # 하한 2.2: 2.1.0 은 Python 3.12 용 사전빌드 휠이 없어 소스 빌드(컴파일러 필요)를
+                        # 유발했다고 추정한다(검증 실험 전). python-dateutil 은 pandas 가 자동 설치한다.
+numpy>=1.26,<3.0
+streamlit>=1.35
+plotly>=5.24
+simpy>=4.0
+scipy>=1.11             # 위 설명 참조 — 임포트에는 안 보이는 간접 의존
+geopandas>=0.14
+shapely>=2.0
+pyogrio>=0.7
+pyproj>=3.6
+oracledb==2.5.1         # 검증한 버전. 3.x 는 Windows 에서 네이티브 확장이 정책으로 차단됐다

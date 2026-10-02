@@ -1,0 +1,29 @@
+# 빌드 컨텍스트에서 뺀다 — 크기를 줄이고, 비밀이 이미지에 섞이는 사고를 막는다
+.git
+.gitignore
+.claude
+
+# 로컬 환경·캐시
+.venv
+venv
+__pycache__
+*.pyc
+cache
+
+# 이미지에 필요 없는 것 (결과는 DB 에서 읽는다)
+outputs
+data
+docs
+tests
+analysis
+*.ipynb
+
+# 비밀 — 어떤 경우에도 이미지에 들어가면 안 된다
+.env
+*.env
+secret*
+*wallet*
+*.pem
+*.sso
+*.p12
+tnsnames.ora
